@@ -17,7 +17,12 @@
 BH1750 lightMeter;
 
 
-// AWS IoT Core
+// Adafruit PIR Motion Sensor
+#define PIR_PIN 25
+int motionVal = 0;
+
+
+// AWS
 #include "secrets.h"
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -56,6 +61,9 @@ void setup() {
     Serial.println(F("Error initialising BH1750"));
   }
 
+
+  // Adafruit PIR Motion Sensor
+  pinMode(PIR_PIN, INPUT);
 
 
   // WiFi
@@ -131,6 +139,7 @@ void loop() {
   Serial.print("Pressure: ");Serial.print(humidity.relative_humidity);Serial.println(" RH %");
 
 
+  
   // Light Sensor
   float lux = 0.0;
   if (lightMeter.measurementReady()) {
@@ -138,18 +147,23 @@ void loop() {
     Serial.print("Light: ");
     Serial.print(lux);
     Serial.println(" lx");
-    tft.drawString("Light: " + String(lux) + (" lx"), 5, 150, 2);
   }
 
 
-  // AWS IoT Core Pub
+  // PIR Motion Sensor
+  motionVal = digitalRead(PIR_PIN);
+  Serial.println("Motion: " + String(motionVal));
+
+
+  // AWS IoT Core
   StaticJsonDocument<200> doc;
   doc["unit2_humidity"] = temp.temperature;
   doc["unit2_temperature"] = humidity.relative_humidity;
   doc["unit2_lux"] = lux;
+  doc["motion"] = motionVal;
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
   client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
   client.loop();
-  delay(3000);
+  delay(2000);
 }

@@ -9,19 +9,19 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <TFT_eSPI.h>
 
-// AWS
+
+// BH1750 Light Sensor 
+#include <BH1750.h>
+#include <Wire.h>
+
+BH1750 lightMeter;
+
+
+// AWS IoT Core
 #include "secrets.h"
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-
-// Light Sensor GY-302
-#include <Wire.h>
-#include <ErriezBH1750.h>
-// ADDR line LOW/open:  I2C address 0x23 (0x46 including R/W bit) [default]
-// ADDR line HIGH:      I2C address 0x5C (0xB8 including R/W bit)
-BH1750 sensor(LOW);
-
 #define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
 #define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub"
 WiFiClientSecure net = WiFiClientSecure();
@@ -44,9 +44,22 @@ void messageHandler(char* topic, byte* payload, unsigned int length)
 
 void setup() {
   Serial.begin(115200);
+  Wire.begin();
+  delay(200);
+
+
+  // BH1750 Light Sensor
+  // begin returns a boolean that can be used to detect setup problems.
+  if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
+    Serial.println(F("BH1750 Advanced begin"));
+  } else {
+    Serial.println(F("Error initialising BH1750"));
+  }
+
+
 
   // WiFi
-  delay(1000);
+  delay(200);
   Serial.println();
   Serial.println();
   Serial.print("Connecting to ");
@@ -69,13 +82,6 @@ void setup() {
   // Display
   tft.init();
   tft.fillScreen(TFT_BLACK);
-
-  // Initialize I2C bus for light sensor
-  Wire.begin();
-  // Initialize sensor in continues mode, high 0.5 lx resolution
-  sensor.begin(ModeContinuous, ResolutionHigh);
-  // Start conversion
-  sensor.startConversion();
 
   if (aht.begin()) {
     Serial.println("Found AHT20");
@@ -124,30 +130,26 @@ void loop() {
   Serial.print("Temperature: ");Serial.print(temp.temperature);Serial.println(" degrees C");
   Serial.print("Pressure: ");Serial.print(humidity.relative_humidity);Serial.println(" RH %");
 
+
   // Light Sensor
-  uint16_t lux;
-  if (sensor.isConversionCompleted()) {
-    // Read light
-    lux = sensor.read();
-    // Print light
-    Serial.print(F("Light: "));
-    Serial.print(lux / 2);
-    Serial.print(F("."));
-    Serial.print(lux % 10);
-    Serial.println(F(" LUX"));
+  float lux = 0.0;
+  if (lightMeter.measurementReady()) {
+    lux = lightMeter.readLightLevel();
+    Serial.print("Light: ");
+    Serial.print(lux);
+    Serial.println(" lx");
+    tft.drawString("Light: " + String(lux) + (" lx"), 5, 150, 2);
   }
 
 
-
-
-  // AWS
+  // AWS IoT Core Pub
   StaticJsonDocument<200> doc;
-  doc["humidity"] = temp.temperature;
-  doc["temperature"] = humidity.relative_humidity;
-  doc["light"] = humidity.relative_humidity;
+  doc["unit2_humidity"] = temp.temperature;
+  doc["unit2_temperature"] = humidity.relative_humidity;
+  doc["unit2_lux"] = lux;
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
   client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
   client.loop();
-  delay(1000);
+  delay(3000);
 }

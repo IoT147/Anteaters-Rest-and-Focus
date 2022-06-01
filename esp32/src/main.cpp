@@ -9,18 +9,24 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <TFT_eSPI.h>
 
-
+// Deviceid
 const int UNIT_NUM = 1;
+
+
 // BH1750 Light Sensor 
 #include <BH1750.h>
 #include <Wire.h>
-
 BH1750 lightMeter;
 
 
 // Adafruit PIR Motion Sensor
 #define PIR_PIN 25
 int motionVal = 0;
+
+
+// VL53L0X Time-of-Flight Distance Sensor
+#include <VL53L0X.h>
+VL53L0X tofSensor;
 
 
 // AWS
@@ -369,6 +375,15 @@ void setup() {
   pinMode(PIR_PIN, INPUT);
 
 
+  // VL53L0X Time-of-Flight Sensor
+  tofSensor.setTimeout(500);
+  if (!tofSensor.init())
+  {
+    Serial.println("Failed to detect and initialize VL53L0X!");
+    while (1) {}
+  }
+
+
   // WiFi
   delay(200);
   Serial.println();
@@ -451,6 +466,10 @@ void setup() {
 }
 
 void loop() {
+  // Deviceid
+  tft.drawString("Device ID: " + String(UNIT_NUM), 5, 220, 2);
+
+
   // Humidity Temp Sensor
   sensors_event_t humidity, temp;
   aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
@@ -474,8 +493,7 @@ void loop() {
   // PIR Motion Sensor
   motionVal = digitalRead(PIR_PIN);
   Serial.println("Motion: " + String(motionVal));
-  tft.drawString("Motion: " + String(motionVal), 5, 70, 2);
-
+  tft.drawString("Motion: " + String(motionVal), 5, 100, 2);
 
 
   // INMP441
@@ -505,11 +523,19 @@ void loop() {
       Leq_samples = 0;
       
       Serial.println("Decibel: " + String(Leq_dB));
-      tft.drawString("Decibel: " + String(Leq_dB), 5, 100, 2);
+      tft.drawString("Decibel: " + String(Leq_dB), 5, 130, 2);
       // Debug only
       //Serial.printf("%u processing ticks\n", q.proc_ticks);
     }
   }
+
+
+  // VL53L0X
+  float distance = 0;
+  distance = tofSensor.readRangeSingleMillimeters();
+    Serial.println("Distance: " + String(distance) + " mm");
+    tft.drawString("Distance: " + String(distance) + " mm", 5, 160, 2);
+
 
 
   // AWS IoT Core
@@ -520,6 +546,7 @@ void loop() {
   doc["lux"] = int(lux);
   doc["motion"] = int(motionVal);
   doc["decibel"] = int(Leq_dB);
+  doc["distance"] = int(distance);
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
   client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);

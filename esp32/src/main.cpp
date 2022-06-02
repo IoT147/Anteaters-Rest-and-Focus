@@ -551,5 +551,5 @@ void loop() {
   serializeJson(doc, jsonBuffer); // print to client
   client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
   client.loop();
-  delay(3000);
+  delay(1000);
 }
